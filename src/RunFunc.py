@@ -100,27 +100,19 @@ def train_and_test(mode, batch_size, epoch, data_path, verbose):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
+
     parser.add_argument(
-        '-m', type=str, help='mode to train - str , supported : all/original/dropout/batch normalization/weight decay , default = all')
+        '-m', '--mode', type=str, default='all', help='Mode of training, supported : all/original/dropout/batch normalization/weight decay , default <"all">')
     parser.add_argument(
-        '-b', type=int, help='batch size - integer , default = 256')
+        '-b', '--batch_size', type=int, default=256, help='Batch size, default <256>')
     parser.add_argument(
-        '-e', type=int, help='num of epochs - integer , default = 15')
+        '-e', '--epochs', default=15, type=int, help='Number of epochs, default <15>')
     parser.add_argument(
-        '-p', type=str, help='path to database - str , default = ./data/mnist')
+        '-p', '--data_path', default='./data/mnist', type=str, help='Path to database, default <"./data/mnist">')
     parser.add_argument(
-        '-v', type=int, help='verbose indicator 1 - true,default = 1')
+        '-v', '--verbose', dest='verbose', action='store_true', default=False, help='Enable verbose mode')
+
     args = parser.parse_args()
-    # parse if not default values
-    mode, batch_size, epoch, path, verbose = args.m, args.b, args.e, args.p, args.v
-    if verbose == None:
-        verbose = 1
-    if mode == None:
-        mode = 'all'
-    if batch_size == None:
-        batch_size = 256
-    if epoch == None:
-        epoch = 15
-    if path == None:
-        data_path = './data/mnist'
-    train_and_test(mode, batch_size, epoch, data_path, verbose)
+
+    train_and_test(args.mode, args.batch_size, args.epochs,
+                   args.data_path, args.verbose)
