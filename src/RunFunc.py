@@ -10,44 +10,54 @@ import argparse
 import time
 
 
-def train_and_test(mode, batch_size, epoch, data_path, verbose):
+def train_and_test(mode, batch_size, epochs, data_path, verbose):
+    # Start training network
     print('*'*80)
     print('executing modes: ' + mode + ', batch size:{} '.format(batch_size) +
-          ', epochs:{} '.format(epoch) + ', data path = ' + data_path)
+          ', epochs:{} '.format(epochs) + ', data path = ' + data_path)
     print('*'*80)
 
-    train_dataset = mnist.MNIST(
-        data_path, train=True, download=False, transform=ToTensor())
-    test_dataset = mnist.MNIST(
-        data_path, train=False, download=False, transform=ToTensor())
+    # load FashionMNIST dataset from path or download it if it doesn't exist
+    train_dataset = mnist.FashionMNIST(
+        data_path, train=True, download=True, transform=ToTensor())
+    test_dataset = mnist.FashionMNIST(
+        data_path, train=False, download=True, transform=ToTensor())
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size)
     test_loader = DataLoader(test_dataset, batch_size=batch_size)
 
     models = [Lenet5.NetOriginal(), Lenet5.NetD(), Lenet5.NetBN(),
               Lenet5.NetOriginal()]
+
     models_name = ['original', 'dropout',
                    'batch normalization', 'weight decay']
+
     if mode != 'all':
         ix = models_name.index(mode)
         models = [models[ix]]
         models_name = [models_name[ix]]
+
     orig_res, dropout_res, bn_res, weight_decay_res = [], [], [], []
     res_vs_name = {'original': orig_res, 'dropout': dropout_res,
                    'batch normalization': bn_res, 'weight decay': weight_decay_res}
     train_orig, train_drop, train_bn, train_wd = [], [], [], []
     train_res_vs_name = {'original': train_orig, 'dropout': train_drop,
                          'batch normalization': train_bn, 'weight decay': train_wd}
+
     num_of_samples_train_data = train_loader.dataset.train_data.shape[0]
     num_of_calls = len(train_loader)
+
     for name, model in zip(models_name, models):
         if name != 'weight decay':
             sgd = SGD(model.parameters(), lr=1e-1)
         else:
             sgd = SGD(model.parameters(), lr=1e-1, weight_decay=0.001)
+
         cross_error = CrossEntropyLoss()
-        print('start trainig model: ' + name)
-        for _epoch in range(epoch):
+
+        print('Start training model: ' + name)
+
+        for _epoch in range(epochs):
             start_time = time.time()
             model.train(True)
             sum_of_errors_in_epoch = 0
@@ -89,14 +99,15 @@ def train_and_test(mode, batch_size, epoch, data_path, verbose):
                 correct / sumv) + ' epoch : {}'.format(_epoch+1))
             end_time = time.time()
             print('time elapsed {}'.format(end_time-start_time))
-            print('**************************************************************************************************************')
+            print('*'*80)
             res_vs_name[name].append(correct / sumv)
         print(res_vs_name[name])
         #torch.save(model, 'models/mnist_{:.2f}.pkl'.format(correct / _sum))
+
     for name in models_name:
         print('Results for ' + name + ' Training accuracy')
         print(train_res_vs_name[name])
-        print('**************************************************************************************************************')
+        print('*'*80)
         print('Results for ' + name + ' Testing accuracy')
         print(res_vs_name[name])
 
