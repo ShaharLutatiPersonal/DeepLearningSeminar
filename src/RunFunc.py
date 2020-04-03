@@ -11,16 +11,19 @@ import time
 
 
 def train_and_test(mode, batch_size, epoch, data_path, verbose):
-    print('**************************************************************************************************************')
-    print('executing modes: ' + mode + ',batch size:{} '.format(batch_size) +
-          ',epoch:{} '.format(epoch) + ',data path = ' + data_path)
-    print('**************************************************************************************************************')
+    print('*'*80)
+    print('executing modes: ' + mode + ', batch size:{} '.format(batch_size) +
+          ', epochs:{} '.format(epoch) + ', data path = ' + data_path)
+    print('*'*80)
+
     train_dataset = mnist.MNIST(
         data_path, train=True, download=False, transform=ToTensor())
     test_dataset = mnist.MNIST(
         data_path, train=False, download=False, transform=ToTensor())
+
     train_loader = DataLoader(train_dataset, batch_size=batch_size)
     test_loader = DataLoader(test_dataset, batch_size=batch_size)
+
     models = [Lenet5.NetOriginal(), Lenet5.NetD(), Lenet5.NetBN(),
               Lenet5.NetOriginal()]
     models_name = ['original', 'dropout',
