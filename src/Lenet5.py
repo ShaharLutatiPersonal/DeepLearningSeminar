@@ -102,6 +102,7 @@ class NetBN(nn.Module):
         self.Tanh4 = nn.Tanh()
         self.fc2 = nn.Linear(84, 10)
         self.Tanh5 = nn.Tanh()
+
     def forward(self, input):
         output = self.BN(input)
         output = self.conv1(output)
