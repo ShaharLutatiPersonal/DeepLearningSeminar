@@ -9,6 +9,7 @@ from torchvision.transforms import ToTensor
 import numpy as np
 import argparse
 import time
+import torch
 
 models = [Lenet5.NetOriginal(), Lenet5.NetD(), Lenet5.NetBN(),
           Lenet5.NetOriginal()]
@@ -49,11 +50,17 @@ def train_and_test(mode, batch_size, epochs, data_path, verbose):
     # Iteration per epoch
     iterations = len(train_loader)
 
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
     # Train selected technique
     for technique, model in zip(models_technique, models):
         wd = 0
         if technique == 'wd':
             wd = 0.001
+
+
+        if torch.cuda.is_available():
+            model.to(device)
 
         # Declare optimizer
         sgd = SGD(model.parameters(), lr=1e-1, weight_decay=wd)
@@ -72,7 +79,11 @@ def train_and_test(mode, batch_size, epochs, data_path, verbose):
             model.train(True)
 
             # Iterate mini batches to cover entire database
-            for idx, (train_x, train_label) in enumerate(train_loader):
+            for idx, data in enumerate(train_loader):
+
+                # Send data to device (important when using GPU)
+                train_x, train_label = data[0].to(device), data[1].to(device)
+
                 # Zeros gradient to prevent accumulation
                 sgd.zero_grad()
 
@@ -116,11 +127,12 @@ def train_and_test(mode, batch_size, epochs, data_path, verbose):
             print('\r\nEpoch {} training done!'.format(epoch + 1))
             print('Start testing')
 
-            for idx, (test_x, test_label) in enumerate(test_loader):
+            for idx, data in enumerate(test_loader):
+                test_x, test_label = data[0].to(device), data[1].to(device)
                 predicted_labels = model(test_x.float()).detach()
-                predict_ys = np.argmax(predicted_labels, axis=-1)
+                predict_ys = torch.argmax(predicted_labels, dim=1)
                 _est = predict_ys == test_label
-                correct += np.sum(_est.numpy(), axis=-1)
+                correct += torch.sum(_est, dim=0).cpu().item()
                 sumv += _est.shape[0]
 
             print('Accuracy achieved: {:.2f}%'.format(correct / sumv))
