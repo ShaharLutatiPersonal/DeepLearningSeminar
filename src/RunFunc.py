@@ -16,26 +16,13 @@ models = [Lenet5.NetOriginal(), Lenet5.NetD(), Lenet5.NetBN(),
 models_technique = ['none', 'dropout', 'bn', 'wd']
 
 
-class bcolors:
-    HEADER = '\033[95m'
-    OKBLUE = '\033[94m'
-    OKGREEN = '\033[92m'
-    WARNING = '\033[93m'
-    FAIL = '\033[91m'
-    ENDC = '\033[0m'
-    BOLD = '\033[1m'
-    UNDERLINE = '\033[4m'
-
-
 def train_and_test(mode, batch_size, epochs, data_path, verbose):
     # Start training network
-    print(bcolors.BOLD + '*'*80 + bcolors.ENDC)
-    print(bcolors.OKBLUE
-          + 'Executing technique:' + mode +
+    print('*'*80)
+    print('Executing technique:' + mode +
           ', batch size:{} '.format(batch_size)
-          + ', epochs:{} '.format(epochs) + ', data path:{}'.format(data_path)
-          + bcolors.ENDC)
-    print(bcolors.BOLD + '*'*80 + bcolors.ENDC)
+          + ', epochs:{} '.format(epochs) + ', data path:{}'.format(data_path))
+    print('*'*80)
 
     # load FashionMNIST dataset from path or download it if it doesn't exist
     train_dataset = mnist.FashionMNIST(
@@ -110,9 +97,9 @@ def train_and_test(mode, batch_size, epochs, data_path, verbose):
                     precentile_done = round(100*(idx + 1)/iterations)
                     progress_symbols = int(floor(precentile_done*80/100))
                     print('\r['
-                          + bcolors.BOLD + ('#')*progress_symbols
+                          + ('#')*progress_symbols
                           + (' ')*(80 - progress_symbols)
-                          + bcolors.ENDC + ']' +
+                          + ']' +
                           ' Epoch {}/{} progress {}/100%'.format(epoch + 1, epochs, precentile_done), end='')
 
             # Save epoch's accuracy for current technique
@@ -154,14 +141,15 @@ def train_and_test(mode, batch_size, epochs, data_path, verbose):
         #torch.save(model, 'models/mnist_{:.2f}.pkl'.format(correct / _sum))
 
     # Print final results table
-    print(bcolors.OKGREEN + '*'*50)
-    print('*'*17 + 'RESULTS  SUMMARY' + '*'*17)
+    print('*'*50)
+    print('*'*16 + ' RESULTS  SUMMARY ' + '*'*16)
+    print('*'*50)
     print('* technique *** train accuracy *** test accuracy *')
+    print('*'*50)
     for technique in models_technique:
-        print('* ' + technique + ' *** '
-              + train_results_dict[technique][-1] + '% *** '
-              + results_dict[technique][-1] + '% *')
-    print('*'*50 + bcolors.ENDC)
+        print('* ' + technique + '\t    ***\t{:.2f}'.format(train_results_dict[technique][-1]*100)
+              + '%         *** {:.2f}'.format(results_dict[technique][-1]*100) + '%        *')
+        print('*'*50)
 
 
 if __name__ == '__main__':
