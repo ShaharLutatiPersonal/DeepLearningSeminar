@@ -6,10 +6,10 @@ from torch.nn import CrossEntropyLoss
 from torch.optim import SGD
 from torch.utils.data import DataLoader
 from torchvision.transforms import ToTensor
-import numpy as np
 import argparse
 import time
-import torch
+import matplotlib.pyplot as plt
+
 
 models = [Lenet5.NetOriginal(), Lenet5.NetD(), Lenet5.NetBN(),
           Lenet5.NetOriginal()]
@@ -124,8 +124,9 @@ def train_and_test(mode, batch_size, epochs, data_path, verbose):
             correct = 0
             sumv = 0
 
-            print('\r\nEpoch {} training done!'.format(epoch + 1))
-            print('Start testing')
+            if verbose:
+                print('\r\nEpoch {} training done!'.format(epoch + 1))
+                print('Start testing')
 
             for idx, data in enumerate(test_loader):
                 test_x, test_label = data[0].to(device), data[1].to(device)
@@ -135,9 +136,8 @@ def train_and_test(mode, batch_size, epochs, data_path, verbose):
                 correct += torch.sum(_est, dim=0).cpu().item()
                 sumv += _est.shape[0]
 
-            print('Accuracy achieved: {:.2f}%'.format(correct / sumv))
-
             if verbose:
+                print('Accuracy achieved: {:.2f}%'.format(correct / sumv))
                 print('Time elapsed for epoch {:.2f} seconds'.format(
                     time.time()-start_time))
                 print('*'*80)
@@ -159,9 +159,18 @@ def train_and_test(mode, batch_size, epochs, data_path, verbose):
     print('* technique *** train accuracy *** test accuracy *')
     print('*'*50)
     for technique in models_technique:
-        print('* ' + technique + ' '*len(technique) + '***\t{:.2f}'.format(train_results_dict[technique][-1]*100)
+        print('* ' + technique + ' '*(10 - len(technique)) + '***\t{:.2f}'.format(train_results_dict[technique][-1]*100)
               + '%         *** {:.2f}'.format(results_dict[technique][-1]*100) + '%        *')
         print('*'*50)
+        fig, ax = plt.subplots()
+        train_string = 'Train using {} technique'.format(technique)
+        test_string = 'Test using {} technique'.format(technique)
+        ax.plot(range(1, epochs + 1), train_results_dict[technique], label=train_string)
+        ax.plot(range(1, epochs + 1), results_dict[technique], label=test_string)
+        ax.set_xlabel('epochs')
+        ax.set_ylabel('Accuracy (%)')
+        ax.set_title('Lenet5 results using {} technique'.format(technique))
+        ax.legend()
 
 
 if __name__ == '__main__':
