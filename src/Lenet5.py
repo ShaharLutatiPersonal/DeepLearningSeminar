@@ -68,11 +68,9 @@ class NetD(nn.Module):
 
     def forward(self, input):
         output = self.conv1(input)
-        #output = self.dropout1(output)
         output = self.ReLU1(output)
         output = self.pool1(output)
         output = self.conv2(output)
-        #output = self.dropout2(output)
         output = self.ReLU2(output)
         output = self.pool2(output)
         output = self.conv3(output)

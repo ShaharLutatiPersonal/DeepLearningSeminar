@@ -1,5 +1,6 @@
 import Lenet5
 import torch
+from math import floor as floor
 from torchvision.datasets import mnist
 from torch.nn import CrossEntropyLoss
 from torch.optim import SGD
@@ -15,12 +16,26 @@ models = [Lenet5.NetOriginal(), Lenet5.NetD(), Lenet5.NetBN(),
 models_technique = ['none', 'dropout', 'bn', 'wd']
 
 
+class bcolors:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+
+
 def train_and_test(mode, batch_size, epochs, data_path, verbose):
     # Start training network
-    print('*'*80)
-    print('Executing technique: ' + mode + ', batch size:{} '.format(batch_size) +
-          ', epochs:{} '.format(epochs) + ', data path:{}'.format(data_path))
-    print('*'*80)
+    print(bcolors.BOLD + '*'*80 + bcolors.ENDC)
+    print(bcolors.OKBLUE
+          + 'Executing technique:' + mode +
+          ', batch size:{} '.format(batch_size)
+          + ', epochs:{} '.format(epochs) + ', data path:{}'.format(data_path)
+          + bcolors.ENDC)
+    print(bcolors.BOLD + '*'*80 + bcolors.ENDC)
 
     # load FashionMNIST dataset from path or download it if it doesn't exist
     train_dataset = mnist.FashionMNIST(
@@ -30,18 +45,17 @@ def train_and_test(mode, batch_size, epochs, data_path, verbose):
     train_loader = DataLoader(train_dataset, batch_size=batch_size)
     test_loader = DataLoader(test_dataset, batch_size=batch_size)
 
+    global models
+    global models_technique
+
     if mode != 'all':
         ix = models_technique.index(mode)
         models = [models[ix]]
         models_technique = [models_technique[ix]]
 
-    orig_res, dropout_res, bn_res, wd_res = [], [], [], []
-    results_dict = {'none': orig_res, 'dropout': dropout_res,
-                    'bn': bn_res, 'wd': wd_res}
+    results_dict = {'none': [], 'dropout': [], 'bn': [], 'wd': []}
 
-    train_orig, train_drop, train_bn, train_wd = [], [], [], []
-    train_results_dict = {'none': train_orig, 'dropout': train_drop,
-                          'bn': train_bn, 'wd': train_wd}
+    train_results_dict = {'none': [], 'dropout': [], 'bn': [], 'wd': []}
 
     train_samples_num = train_loader.dataset.train_data.shape[0]
 
@@ -54,21 +68,23 @@ def train_and_test(mode, batch_size, epochs, data_path, verbose):
         if technique == 'wd':
             wd = 0.001
 
+        # Declare optimizer
         sgd = SGD(model.parameters(), lr=1e-1, weight_decay=wd)
 
+        # Declare used loss
         cross_error = CrossEntropyLoss()
 
         print('Start training model: ' + technique)
 
-        ### Iterate database the number of epochs
-        for _epoch in range(epochs):
+        # Iterate database the number of epochs
+        for epoch in range(epochs):
             start_time = time.time()
             epoch_total_errors = 0
 
-            ### Set network for training mode
+            # Set network for training mode
             model.train(True)
 
-            ### Iterate mini batches to cover entire database
+            # Iterate mini batches to cover entire database
             for idx, (train_x, train_label) in enumerate(train_loader):
                 # Zeros gradient to prevent accumulation
                 sgd.zero_grad()
@@ -77,64 +93,75 @@ def train_and_test(mode, batch_size, epochs, data_path, verbose):
                 predicted_labels = model(train_x.float())
 
                 # Calculate error
-                _error = cross_error(predicted_labels, train_label.long())
+                error = cross_error(predicted_labels, train_label.long())
 
                 # Sum wrong labels
-                epoch_total_errors += _error.item()*train_label.shape[0]
+                # Error is given as percentage, need to multiply by mini batch size
+                epoch_total_errors += error.item()*train_label.shape[0]
 
                 # Backpropegate error
-                _error.backward()
+                error.backward()
 
                 # Update network parameters
                 sgd.step()
 
                 # Print progress
                 if verbose:
-                    precentile_done = round(100*idx/iterations)
-                    print('\r ['+'%s' % ("#")*precentile_done+']' +
-                          'progress in epoch training {}%'.format(precentile_done), end='')
+                    precentile_done = round(100*(idx + 1)/iterations)
+                    progress_symbols = int(floor(precentile_done*80/100))
+                    print('\r['
+                          + bcolors.BOLD + ('#')*progress_symbols
+                          + (' ')*(80 - progress_symbols)
+                          + bcolors.ENDC + ']' +
+                          ' Epoch {}/{} progress {}/100%'.format(epoch + 1, epochs, precentile_done), end='')
 
-            # the error given as the percentile of the error from the batch, so by multiplying by the batch size and divide it by 100
-            # we get the integer number of error to be summed over the 60k DB, we divide here once by 100 and not every iteration for elegance
-            # we don't multiply with fixed batch size for supporting different size batches
+            # Save epoch's accuracy for current technique
+            # Errors count is normalized by database size and converted to percents
             train_results_dict[technique].append(
                 1 - (epoch_total_errors / train_samples_num) / 100)
+
+            # Stop network training before evaluating performance over test data
+            model.train(False)
+
             correct = 0
             sumv = 0
 
-            # We take the mnist db and use the 60k for training and 10k for test
-            # since we already use mini batch we assuring that we won't fall to local artifact
-            # Important Change to eval mode for Dropout to clear out
-            model.train(False)
+            print('\r\nEpoch {} training done!'.format(epoch + 1))
+            print('Start testing')
 
-            ### 
             for idx, (test_x, test_label) in enumerate(test_loader):
                 predicted_labels = model(test_x.float()).detach()
                 predict_ys = np.argmax(predicted_labels, axis=-1)
-                label_np = test_label.numpy()
                 _est = predict_ys == test_label
                 correct += np.sum(_est.numpy(), axis=-1)
                 sumv += _est.shape[0]
 
-            print('accuracy: {:.2f}'.format(
-                correct / sumv) + ' epoch : {}'.format(_epoch+1))
+            print('Accuracy achieved: {:.2f}%'.format(correct / sumv))
 
-            end_time = time.time()
-            print('time elapsed {}'.format(end_time-start_time))
-            print('*'*80)
+            if verbose:
+                print('Time elapsed for epoch {:.2f} seconds'.format(
+                    time.time()-start_time))
+                print('*'*80)
+
+            # Save test accuracy for current epoch
             results_dict[technique].append(correct / sumv)
 
-        print(results_dict[technique])
+        if verbose:
+            print('Accuracies for technique {}'.format(technique))
+            print(results_dict[technique])
+
+        # Save model to file
         #torch.save(model, 'models/mnist_{:.2f}.pkl'.format(correct / _sum))
 
-    # Print final results
+    # Print final results table
+    print(bcolors.OKGREEN + '*'*50)
+    print('*'*17 + 'RESULTS  SUMMARY' + '*'*17)
+    print('* technique *** train accuracy *** test accuracy *')
     for technique in models_technique:
-        print('*'*80)
-        print('Results for ' + technique + ' training accuracy')
-        print(train_results_dict[technique] + '%')
-        print('Results for ' + technique + ' testing accuracy')
-        print(results_dict[technique] + '%')
-        print('*'*80)
+        print('* ' + technique + ' *** '
+              + train_results_dict[technique][-1] + '% *** '
+              + results_dict[technique][-1] + '% *')
+    print('*'*50 + bcolors.ENDC)
 
 
 if __name__ == '__main__':
@@ -149,7 +176,8 @@ if __name__ == '__main__':
     parser.add_argument(
         '-e', '--epochs', type=int, default=15, help='Number of epochs, default <15>')
     parser.add_argument(
-        '-p', '--data_path', type=str, default='./data/mnist', help='Path to database, default <"./data/mnist">')
+        '-p', '--data_path', type=str, default='./data/mnist',
+        help='Path to database, default <"./data/mnist">')
     parser.add_argument(
         '-v', '--verbose', dest='verbose', action='store_true', default=False, help='Enable verbose mode')
 
