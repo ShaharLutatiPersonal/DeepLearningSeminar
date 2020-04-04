@@ -159,7 +159,7 @@ def train_and_test(mode, batch_size, epochs, data_path, verbose):
     print('* technique *** train accuracy *** test accuracy *')
     print('*'*50)
     for technique in models_technique:
-        print('* ' + technique + '\t    ***\t{:.2f}'.format(train_results_dict[technique][-1]*100)
+        print('* ' + technique + ' '*len(technique) + '***\t{:.2f}'.format(train_results_dict[technique][-1]*100)
               + '%         *** {:.2f}'.format(results_dict[technique][-1]*100) + '%        *')
         print('*'*50)
 
