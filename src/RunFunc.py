@@ -184,7 +184,8 @@ def train_and_test(mode, batch_size, epochs, data_path, verbose, test_mode):
             ax.set_ylabel('Accuracy')
             ax.set_title('Lenet5 results using {} technique'.format(technique))
             ax.legend()
-            os.mkdir('models')
+            if not os.path.exists('models'):
+                os.mkdir('models')
             torch.save(models[models_technique.index(technique)], './models/{}.pth'.format(technique))
 
 
