@@ -29,7 +29,7 @@ def test_models(model, test_loader, device):
         sumv += _est.shape[0]
     return correct, sumv
 
-def train_and_test(mode, batch_size, epochs, data_path, verbose, test_mode=''):
+def train_and_test(mode, batch_size, epochs, data_path, verbose, test_mode):
     # Start training network
     print('*'*80)
     print('Executing technique:' + mode +
@@ -64,7 +64,7 @@ def train_and_test(mode, batch_size, epochs, data_path, verbose, test_mode=''):
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    if test_mode != '':
+    if test_mode:
         for technique in models_technique:
             tested_model = torch.load('./models/{}.pth'.format(technique))
             tested_model.eval()
@@ -172,7 +172,7 @@ def train_and_test(mode, batch_size, epochs, data_path, verbose, test_mode=''):
         print('*'*50)
 
         # When not in test mode - show graphs and save models
-        if test_mode == '':
+        if not test_mode:
             fig, ax = plt.subplots()
             train_string = 'Train using {} technique'.format(technique)
             test_string = 'Test using {} technique'.format(technique)
@@ -205,7 +205,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '-v', '--verbose', dest='verbose', action='store_true', default=False, help='Enable verbose mode')
     parser.add_argument(
-        '-l', '--test_mode', type=str, default='', help='Load models from path for testing only')
+        '-l', '--test_mode', dest=test_mode, action='store_true', default=False, help='Load models for testing only')
 
     args = parser.parse_args()
 
