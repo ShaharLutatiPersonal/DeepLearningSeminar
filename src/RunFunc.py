@@ -205,7 +205,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '-v', '--verbose', dest='verbose', action='store_true', default=False, help='Enable verbose mode')
     parser.add_argument(
-        '-l', '--test_mode', dest=test_mode, action='store_true', default=False, help='Load models for testing only')
+        '-l', '--test_mode', dest='test_mode', action='store_true', default=False, help='Load models for testing only')
 
     args = parser.parse_args()
 
