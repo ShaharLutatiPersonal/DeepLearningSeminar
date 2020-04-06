@@ -148,7 +148,7 @@ def train_and_test(mode, batch_size, epochs, data_path, verbose, test_mode):
                 correct, sumv = test_models(model, test_loader, device)
 
                 if verbose:
-                    print('Accuracy achieved: {:.2f}%'.format(correct / sumv))
+                    print('Accuracy achieved: {:.2f}%'.format((correct / sumv)*100))
                     print('Time elapsed for epoch {:.2f} seconds'.format(
                         time.time()-start_time))
                     print('*'*80)
