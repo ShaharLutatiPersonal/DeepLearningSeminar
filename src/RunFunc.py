@@ -6,9 +6,10 @@ from torch.nn import CrossEntropyLoss
 from torch.optim import SGD
 from torch.utils.data import DataLoader
 from torchvision.transforms import ToTensor
-import numpy as np
 import argparse
 import time
+import matplotlib.pyplot as plt
+import os
 
 models = [Lenet5.NetOriginal(), Lenet5.NetD(), Lenet5.NetBN(),
           Lenet5.NetOriginal()]
@@ -16,7 +17,19 @@ models = [Lenet5.NetOriginal(), Lenet5.NetD(), Lenet5.NetBN(),
 models_technique = ['none', 'dropout', 'bn', 'wd']
 
 
-def train_and_test(mode, batch_size, epochs, data_path, verbose):
+def test_models(model, test_loader, device):
+    correct = 0
+    sumv = 0
+    for idx, data in enumerate(test_loader):
+        test_x, test_label = data[0].to(device), data[1].to(device)
+        predicted_labels = model(test_x.float()).detach()
+        predict_ys = torch.argmax(predicted_labels, dim=1)
+        _est = predict_ys == test_label
+        correct += torch.sum(_est, dim=0).cpu().item()
+        sumv += _est.shape[0]
+    return correct, sumv
+
+def train_and_test(mode, batch_size, epochs, data_path, verbose, test_mode):
     # Start training network
     print('*'*80)
     print('Executing technique:' + mode +
@@ -49,96 +62,103 @@ def train_and_test(mode, batch_size, epochs, data_path, verbose):
     # Iteration per epoch
     iterations = len(train_loader)
 
-    # Train selected technique
-    for technique, model in zip(models_technique, models):
-        wd = 0
-        if technique == 'wd':
-            wd = 0.001
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-        # Declare optimizer
-        sgd = SGD(model.parameters(), lr=1e-1, weight_decay=wd)
+    if test_mode:
+        for technique in models_technique:
+            tested_model = torch.load('./models/{}.pth'.format(technique))
+            tested_model.eval()
+            correct, sumv = test_models(tested_model, test_loader, device)
+            results_dict[technique].append(correct / sumv)
+            train_results_dict[technique].append(0)
 
-        # Declare used loss
-        cross_error = CrossEntropyLoss()
+    else:
+        # Train selected technique
+        for technique, model in zip(models_technique, models):
+            wd = 0
+            if technique == 'wd':
+                wd = 0.001
 
-        print('Start training model: ' + technique)
+            if torch.cuda.is_available():
+                model.to(device)
 
-        # Iterate database the number of epochs
-        for epoch in range(epochs):
-            start_time = time.time()
-            epoch_total_errors = 0
+            # Declare optimizer
+            sgd = SGD(model.parameters(), lr=1e-1, weight_decay=wd)
 
-            # Set network for training mode
-            model.train(True)
+            # Declare used loss
+            cross_error = CrossEntropyLoss()
 
-            # Iterate mini batches to cover entire database
-            for idx, (train_x, train_label) in enumerate(train_loader):
-                # Zeros gradient to prevent accumulation
-                sgd.zero_grad()
+            print('Start training model: ' + technique)
 
-                # Forward pass
-                predicted_labels = model(train_x.float())
+            # Iterate database the number of epochs
+            for epoch in range(epochs):
+                start_time = time.time()
+                epoch_total_errors = 0
 
-                # Calculate error
-                error = cross_error(predicted_labels, train_label.long())
+                # Set network for training mode
+                model.train(True)
 
-                # Sum wrong labels
-                # Error is given as percentage, need to multiply by mini batch size
-                epoch_total_errors += error.item()*train_label.shape[0]
+                # Iterate mini batches to cover entire database
+                for idx, data in enumerate(train_loader):
 
-                # Backpropegate error
-                error.backward()
+                    # Send data to device (important when using GPU)
+                    train_x, train_label = data[0].to(device), data[1].to(device)
 
-                # Update network parameters
-                sgd.step()
+                    # Zeros gradient to prevent accumulation
+                    sgd.zero_grad()
 
-                # Print progress
+                    # Forward pass
+                    predicted_labels = model(train_x.float())
+
+                    # Calculate error
+                    error = cross_error(predicted_labels, train_label.long())
+
+                    # Sum wrong labels
+                    # Error is given as percentage, need to multiply by mini batch size
+                    epoch_total_errors += error.item()*train_label.shape[0]
+
+                    # Backpropegate error
+                    error.backward()
+
+                    # Update network parameters
+                    sgd.step()
+
+                    # Print progress
+                    if verbose:
+                        precentile_done = round(100*(idx + 1)/iterations)
+                        progress_symbols = int(floor(precentile_done*80/100))
+                        print('\r['
+                              + ('#')*progress_symbols
+                              + (' ')*(80 - progress_symbols)
+                              + ']' +
+                              ' Epoch {}/{} progress {}/100%'.format(epoch + 1, epochs, precentile_done), end='')
+
+                # Save epoch's accuracy for current technique
+                # Errors count is normalized by database size and converted to percents
+                train_results_dict[technique].append(
+                    1 - (epoch_total_errors / train_samples_num) / 100)
+
+                # Stop network training before evaluating performance over test data
+                model.train(False)
+
                 if verbose:
-                    precentile_done = round(100*(idx + 1)/iterations)
-                    progress_symbols = int(floor(precentile_done*80/100))
-                    print('\r['
-                          + ('#')*progress_symbols
-                          + (' ')*(80 - progress_symbols)
-                          + ']' +
-                          ' Epoch {}/{} progress {}/100%'.format(epoch + 1, epochs, precentile_done), end='')
+                    print('\r\nEpoch {} training done!'.format(epoch + 1))
+                    print('Start testing')
 
-            # Save epoch's accuracy for current technique
-            # Errors count is normalized by database size and converted to percents
-            train_results_dict[technique].append(
-                1 - (epoch_total_errors / train_samples_num) / 100)
+                correct, sumv = test_models(model, test_loader, device)
 
-            # Stop network training before evaluating performance over test data
-            model.train(False)
+                if verbose:
+                    print('Accuracy achieved: {:.2f}%'.format((correct / sumv)*100))
+                    print('Time elapsed for epoch {:.2f} seconds'.format(
+                        time.time()-start_time))
+                    print('*'*80)
 
-            correct = 0
-            sumv = 0
-
-            print('\r\nEpoch {} training done!'.format(epoch + 1))
-            print('Start testing')
-
-            for idx, (test_x, test_label) in enumerate(test_loader):
-                predicted_labels = model(test_x.float()).detach()
-                predict_ys = np.argmax(predicted_labels, axis=-1)
-                _est = predict_ys == test_label
-                correct += np.sum(_est.numpy(), axis=-1)
-                sumv += _est.shape[0]
-
-            print('Accuracy achieved: {:.2f}%'.format(correct / sumv))
+                # Save test accuracy for current epoch
+                results_dict[technique].append(correct / sumv)
 
             if verbose:
-                print('Time elapsed for epoch {:.2f} seconds'.format(
-                    time.time()-start_time))
-                print('*'*80)
-
-            # Save test accuracy for current epoch
-            results_dict[technique].append(correct / sumv)
-
-        if verbose:
-            print('Accuracies for technique {}'.format(technique))
-            print(results_dict[technique])
-
-        # Save model to file
-        #torch.save(model, 'models/mnist_{:.2f}.pkl'.format(correct / _sum))
+                print('Accuracies for technique {}'.format(technique))
+                print(results_dict[technique])
 
     # Print final results table
     print('*'*50)
@@ -147,9 +167,26 @@ def train_and_test(mode, batch_size, epochs, data_path, verbose):
     print('* technique *** train accuracy *** test accuracy *')
     print('*'*50)
     for technique in models_technique:
-        print('* ' + technique + '\t    ***\t{:.2f}'.format(train_results_dict[technique][-1]*100)
+        print('* ' + technique + ' '*(10 - len(technique)) + '***\t{:.2f}'.format(train_results_dict[technique][-1]*100)
               + '%         *** {:.2f}'.format(results_dict[technique][-1]*100) + '%        *')
         print('*'*50)
+
+        # When not in test mode - show graphs and save models
+        if not test_mode:
+            fig, ax = plt.subplots()
+            train_string = 'Train using {} technique'.format(technique)
+            test_string = 'Test using {} technique'.format(technique)
+            ax.plot(range(1, epochs + 1),
+                    train_results_dict[technique], label=train_string)
+            ax.plot(range(1, epochs + 1),
+                    results_dict[technique], label=test_string)
+            ax.set_xlabel('epochs')
+            ax.set_ylabel('Accuracy')
+            ax.set_title('Lenet5 results using {} technique'.format(technique))
+            ax.legend()
+            if not os.path.exists('models'):
+                os.mkdir('models')
+            torch.save(models[models_technique.index(technique)], './models/{}.pth'.format(technique))
 
 
 if __name__ == '__main__':
@@ -168,8 +205,10 @@ if __name__ == '__main__':
         help='Path to database, default <"./data/mnist">')
     parser.add_argument(
         '-v', '--verbose', dest='verbose', action='store_true', default=False, help='Enable verbose mode')
+    parser.add_argument(
+        '-l', '--test_mode', dest='test_mode', action='store_true', default=False, help='Load models for testing only')
 
     args = parser.parse_args()
 
     train_and_test(args.technique, args.batch_size, args.epochs,
-                   args.data_path, args.verbose)
+                   args.data_path, args.verbose, args.test_mode)
