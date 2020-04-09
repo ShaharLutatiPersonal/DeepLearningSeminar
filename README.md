@@ -2,6 +2,7 @@
 ## Tel Aviv University
 # Introduction 
 
+## This Drive is Read-Only, you should copy all the files to your local machine
 We have 2 files:
 Lenet5.py which consisit the different modules ('none','dropout','batch normalization','weight decay')
 where 'weight decay' is actually the 'none' with wd !=0.
