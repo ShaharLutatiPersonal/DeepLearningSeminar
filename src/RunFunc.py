@@ -65,8 +65,6 @@ def train_and_test(mode, batch_size, epochs, data_path, verbose, test_mode):
 
     models_best_results = {}
 
-    best_accuracy = 0
-
     results_dict = {'none': [], 'dropout': [], 'bn': [], 'wd': []}
 
     train_results_dict = {'none': [], 'dropout': [], 'bn': [], 'wd': []}
@@ -94,7 +92,8 @@ def train_and_test(mode, batch_size, epochs, data_path, verbose, test_mode):
 
             if torch.cuda.is_available():
                 model.to(device)
-
+			# Reset best_accuracy for technique  
+			best_accuracy = 0
             # Declare optimizer
             sgd = SGD(model.parameters(), lr=1e-1, weight_decay=wd)
             # Declare scheduler
