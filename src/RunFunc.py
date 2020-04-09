@@ -47,11 +47,16 @@ def train_and_test(mode, batch_size, epochs, data_path, verbose, test_mode):
 
     global models
     global models_technique
+    global models_best_results
 
     if mode != 'all':
         ix = models_technique.index(mode)
         models = [models[ix]]
         models_technique = [models_technique[ix]]
+
+    models_best_results = {}
+
+    best_accuracy = 0
 
     results_dict = {'none': [], 'dropout': [], 'bn': [], 'wd': []}
 
@@ -66,7 +71,8 @@ def train_and_test(mode, batch_size, epochs, data_path, verbose, test_mode):
 
     if test_mode:
         for technique in models_technique:
-            tested_model = torch.load('./models/{}.pth'.format(technique))
+            tested_model = models[models_technique.index(technique)]
+            tested_model.load_state_dict(torch.load('./models/{}.pth'.format(technique)))
             tested_model.eval()
             correct, sumv = test_models(tested_model, test_loader, device)
             results_dict[technique].append(correct / sumv)
@@ -153,8 +159,20 @@ def train_and_test(mode, batch_size, epochs, data_path, verbose, test_mode):
                         time.time()-start_time))
                     print('*'*80)
 
+                # Calculate test accuracy
+                test_accuracy = correct / sumv
+
                 # Save test accuracy for current epoch
-                results_dict[technique].append(correct / sumv)
+                results_dict[technique].append(test_accuracy)
+
+                # Store model's weights and biases for the best result
+                if test_accuracy>best_accuracy:
+
+                    # Store the model's best weigths and biases
+                    models_best_results[technique] = model.state_dict()
+
+                    # Update best test result accuracy
+                    best_accuracy = test_accuracy
 
             if verbose:
                 print('Accuracies for technique {}'.format(technique))
@@ -186,7 +204,7 @@ def train_and_test(mode, batch_size, epochs, data_path, verbose, test_mode):
             ax.legend()
             if not os.path.exists('models'):
                 os.mkdir('models')
-            torch.save(models[models_technique.index(technique)], './models/{}.pth'.format(technique))
+            torch.save(models_best_results[technique], './models/{}.pth'.format(technique))
 
 
 if __name__ == '__main__':
