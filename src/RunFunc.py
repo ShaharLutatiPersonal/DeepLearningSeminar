@@ -79,7 +79,7 @@ def train_and_test(mode, batch_size, epochs, data_path, verbose, test_mode):
     if test_mode:
         for technique in models_technique:
             tested_model = models[models_technique.index(technique)]
-            tested_model.load_state_dict(torch.load('./models/{}.pth'.format(technique)))
+            tested_model.load_state_dict(torch.load('./models/{}.pth'.format(technique)),device)
             tested_model.eval()
             correct, sumv = test_models(tested_model, test_loader, device)
             results_dict[technique].append(correct / sumv)
