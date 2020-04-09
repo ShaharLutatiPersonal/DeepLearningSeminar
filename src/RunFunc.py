@@ -6,6 +6,7 @@ from torch.nn import CrossEntropyLoss
 from torch.optim import SGD
 from torch.utils.data import DataLoader
 from torchvision.transforms import ToTensor
+from copy import deepcopy
 import argparse
 import time
 import matplotlib.pyplot as plt
@@ -42,8 +43,16 @@ def train_and_test(mode, batch_size, epochs, data_path, verbose, test_mode):
         data_path, train=True, download=True, transform=ToTensor())
     test_dataset = mnist.FashionMNIST(
         data_path, train=False, download=True, transform=ToTensor())
-    train_loader = DataLoader(train_dataset, batch_size=batch_size)
+
+    # Split randomly the train data set to validation and train
+    train_samples_num,validation_samples_num = 50000, 10000
+    train_set, val_set = torch.utils.data.random_split(train_dataset, [train_samples_num, validation_samples_num])
+
+    train_loader = DataLoader(train_set, batch_size=batch_size,shuffle = True)
     test_loader = DataLoader(test_dataset, batch_size=batch_size)
+
+    # The validation should run in one batch
+    val_loader = DataLoader(val_set, batch_size=10000)
 
     global models
     global models_technique
@@ -56,13 +65,9 @@ def train_and_test(mode, batch_size, epochs, data_path, verbose, test_mode):
 
     models_best_results = {}
 
-    best_accuracy = 0
-
     results_dict = {'none': [], 'dropout': [], 'bn': [], 'wd': []}
 
     train_results_dict = {'none': [], 'dropout': [], 'bn': [], 'wd': []}
-
-    train_samples_num = train_loader.dataset.train_data.shape[0]
 
     # Iteration per epoch
     iterations = len(train_loader)
@@ -72,7 +77,7 @@ def train_and_test(mode, batch_size, epochs, data_path, verbose, test_mode):
     if test_mode:
         for technique in models_technique:
             tested_model = models[models_technique.index(technique)]
-            tested_model.load_state_dict(torch.load('./models/{}.pth'.format(technique)))
+            tested_model.load_state_dict(torch.load('./models/{}.pth'.format(technique)),device)
             tested_model.eval()
             correct, sumv = test_models(tested_model, test_loader, device)
             results_dict[technique].append(correct / sumv)
@@ -87,10 +92,12 @@ def train_and_test(mode, batch_size, epochs, data_path, verbose, test_mode):
 
             if torch.cuda.is_available():
                 model.to(device)
-
+			# Reset best_accuracy for technique  
+			best_accuracy = 0
             # Declare optimizer
             sgd = SGD(model.parameters(), lr=1e-1, weight_decay=wd)
-
+            # Declare scheduler
+            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(sgd, 'min',patience =2,verbose = True)
             # Declare used loss
             cross_error = CrossEntropyLoss()
 
@@ -100,7 +107,7 @@ def train_and_test(mode, batch_size, epochs, data_path, verbose, test_mode):
             for epoch in range(epochs):
                 start_time = time.time()
                 epoch_total_errors = 0
-
+				
                 # Set network for training mode
                 model.train(True)
 
@@ -144,6 +151,15 @@ def train_and_test(mode, batch_size, epochs, data_path, verbose, test_mode):
                 train_results_dict[technique].append(
                     1 - (epoch_total_errors / train_samples_num) / 100)
 
+                # Run over the validation set loader (only one iteration)
+                for idx ,val_data in enumerate(val_loader):
+                    val_x, val_label = val_data[0].to(device), val_data[1].to(device)
+                    val_predicted_labels = model(val_x.float())
+                    val_error = cross_error(val_predicted_labels, val_label.long())
+
+                # Update scheduler decision based on the validation error
+                scheduler.step(val_error)
+                
                 # Stop network training before evaluating performance over test data
                 model.train(False)
 
@@ -169,7 +185,7 @@ def train_and_test(mode, batch_size, epochs, data_path, verbose, test_mode):
                 if test_accuracy>best_accuracy:
 
                     # Store the model's best weigths and biases
-                    models_best_results[technique] = model.state_dict()
+                    models_best_results[technique] = deepcopy(model.state_dict())
 
                     # Update best test result accuracy
                     best_accuracy = test_accuracy
