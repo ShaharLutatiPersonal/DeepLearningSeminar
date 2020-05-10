@@ -70,3 +70,4 @@ class GRU(nn.Module):
         output = output.view(-1,200) 
         output = self.fc(output)
         return output,(h_n)
+  
