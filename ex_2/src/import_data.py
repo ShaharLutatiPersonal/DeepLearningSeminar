@@ -3,9 +3,9 @@ import torch
 
 
 def forbidden_list(word):
-    forbbid_list = ['<unk>', 'N', '$']
+    forbidden_words = ['<unk>', 'N', '$']
     return True
-    if word in forbbid_list:
+    if word in forbidden_words:
         return False
     else:
         return True
@@ -13,10 +13,10 @@ def forbidden_list(word):
 
 def import_ptb_dataset(dataset_type='train', path='./data/ptb', batch_size=20, vocabulary={}):
     dataset_path = path + '/' + 'ptb.' + dataset_type + '.txt'
-    # Here we read each line, and append each word that has not appered previously to the list
+    # Here we read each line, and append each word that has not appeared previously to the list
     with open(dataset_path) as f:
         text = f.read()
-        # We take the text, split it (default  by sapce) than define it as a set(to remove duplicates) and finally sort it to have consistensy.
+        # We take the text, split it (default by sapce) than define it as a set (to remove duplicates) and finally sort it to have consistensy.
         if len(vocabulary) < 1:
             text_splited = text[1:].split(' ')
             word_span = sorted(set(text_splited))

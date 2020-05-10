@@ -9,12 +9,12 @@ import traitlets
 import matplotlib.pyplot as plt
 
 """
-From wikipedia 
+From wikipedia
 Perplexity is a measurement of how well a probability distribution or probability model
 predicts a sample.
 perp = 2^(-sum(p(x)log2(q(x))))
 one can easily see that the exponent is the cross-entropy
-therefore in order to calculate the loss function all we need to do is 
+therefore in order to calculate the loss function all we need to do is
 to use the cross_entropy and scale it by exp()
 """
 device = torch.device('cuda')
