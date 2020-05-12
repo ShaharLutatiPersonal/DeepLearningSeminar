@@ -1,12 +1,13 @@
+import argparse
 import torch.nn as nn
 import torch.autograd as grad
 import torch
 from torch.optim.sgd import SGD
 from torch.optim.lr_scheduler import ReduceLROnPlateau as plateau
 import math
-import ipywidgets
-import traitlets
 import matplotlib.pyplot as plt
+from import_data import *
+import RNN_models
 
 """
 From wikipedia
@@ -17,10 +18,9 @@ one can easily see that the exponent is the cross-entropy
 therefore in order to calculate the loss function all we need to do is
 to use the cross_entropy and scale it by exp()
 """
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-batch_size = 20
-cross_entropy = nn.CrossEntropyLoss(reduction='mean')
 
+
+# Functions
 
 def perplexity_loss(x):
     return math.exp(x)
@@ -32,7 +32,7 @@ def find_key(dic, val):
             return key
 
 
-def states_alloc(mode='lstm'):
+def states_alloc(batch_size, device, mode='lstm'):
     if mode == 'lstm':
         states = (torch.zeros(2, batch_size, 200).to(device),
                   torch.zeros(2, batch_size, 200).to(device))
@@ -52,39 +52,49 @@ def state_detach(states, mode):
     return states
 
 
-sequence_length = 20  # maximal "memory" for the LSTM to remember
-print('Start loading data')
-train_vec, train_vocab = import_ptb_dataset(
-    dataset_type='train', path='./data', batch_size=batch_size)
-print('loaded the training set, using the vocabulary for other sets')
-valid_vec, dontcare = import_ptb_dataset(
-    dataset_type='valid', path='./data', batch_size=batch_size, vocabulary=train_vocab)
-test_vec, dontcare = import_ptb_dataset(
-    dataset_type='test', path='./data', batch_size=batch_size, vocabulary=train_vocab)
-print('done loading')
-dropout_rate = [0.35, 0]
-print('run for dropouts :')
-print(dropout_rate)
+# Global definitions
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 perpelxity_dict = {}
 model_dict = {}
-
+cross_entropy = nn.CrossEntropyLoss(reduction='mean')
+sequence_length = 20  # maximal "memory" for the LSTM to remember
+dropout_rate = [0.35, 0]
 models = ['lstm', 'gru']
-epochs_count = 20
+batch_size = 20
 
-def RunModel():
+def train_and_test(chosen_models, epochs, is_verbose, is_test_mode, data_path='./data'):
+    # Load data from dataset
+    print('Start loading data')
+
+    train_vec, train_vocab = import_ptb_dataset(
+        dataset_type='train', path=data_path, batch_size=batch_size)
+    print('Training set loaded, use vocabulary for other sets...')
+    valid_vec, dontcare = import_ptb_dataset(
+        dataset_type='valid', path=data_path, batch_size=batch_size, vocabulary=train_vocab)
+
+    test_vec, dontcare = import_ptb_dataset(
+        dataset_type='test', path=data_path, batch_size=batch_size, vocabulary=train_vocab)
+    print('Done loading data')
+
+    if chosen_models != 'all':
+        models = [chosen_models]
+
     for model_name in models:
+        # Train each dropout
         for dp in dropout_rate:
-            print('Test models for dp = {}'.format(dp))
-            if model_name == 'lstm':
-                model = RNN_Zam(dict_size=len(train_vocab),
-                                dp_prob=dp).to(device)
-            else:
-                model = GRU(dict_size=len(train_vocab), dp_prob=dp).to(device)
 
+            # Set learning rate for model
             if model_name == 'lstm':
                 lr = 1*(1-dp*.5)
             else:
                 lr = .5*(1-dp*.5)
+
+           # Select model
+            if model_name == 'lstm':
+                model = RNN_models.RNN_Zam(dict_size=len(train_vocab),
+                               dp_prob=dp).to(device)
+            else:
+                model = RNN_models.GRU(dict_size=len(train_vocab), dp_prob=dp).to(device)
 
             optimizer = torch.optim.SGD(model.parameters(), lr=lr)
             scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
@@ -93,11 +103,14 @@ def RunModel():
             perpelxity_dict['{} {}'.format(model_name, dp)] = {
                 'Train': [], 'Validation': [], 'Test': []}
 
-            for epoch in range(epochs_count):
+            for epoch in range(epochs):
+
+                print('Start train epoch {}'.format(epoch))
+
                 # According to the article initialization with zero state and memory
                 model.train()
+                state = states_alloc(batch_size, device, model_name)
                 loss_term = 0
-                state = states_alloc(model_name)
 
                 for count, ix in enumerate(range(0, train_vec.size(1)-sequence_length, sequence_length)):
                     # taking overlapping vectors with seperation of one word
@@ -128,10 +141,14 @@ def RunModel():
                 loss_term = (loss_term/(count+1))/batch_size
                 valid_error = 0
 
+                perpelxity_dict['{} {}'.format(model_name, dp)]['Train'].append(
+                    perplexity_loss(loss_term))
+
                 with torch.no_grad():
-                    state = states_alloc(model_name)
+                    # Validation
+                    print('Start validation epoch {}'.format(epoch))
+                    state = states_alloc(batch_size, device, model_name)
                     model.eval()
-                    print('Start Validation')
 
                     for count, ix in enumerate(range(0, valid_vec.size(1)-sequence_length, sequence_length)):
                         # taking overlapping vectors with seperation of one word
@@ -149,10 +166,14 @@ def RunModel():
 
                     valid_error = valid_error/(count+1)
                     scheduler.step(valid_error)
-                    print('Start Testing')
 
-                    # Test Section
-                    state = states_alloc(model_name)
+                    perpelxity_dict['{} {}'.format(model_name, dp)]['Validation'].append(
+                        perplexity_loss(valid_error))
+
+
+                    # Test
+                    print('Test model')
+                    state = states_alloc(batch_size, device, model_name)
                     test_error = 0
 
                     for count, ix in enumerate(range(0, test_vec.size(1)-sequence_length, sequence_length)):
@@ -170,16 +191,11 @@ def RunModel():
 
                     test_error = test_error/(count+1)
 
-                perpelxity_dict['{} {}'.format(model_name, dp)]['Train'].append(
-                    perplexity_loss(loss_term))
-                perpelxity_dict['{} {}'.format(model_name, dp)]['Validation'].append(
-                    perplexity_loss(valid_error))
-                perpelxity_dict['{} {}'.format(model_name, dp)]['Test'].append(
-                    perplexity_loss(test_error))
-                print('epoch {} Train Loss = {},Val Loss = {}, Test loss = {}'.format(
+                    perpelxity_dict['{} {}'.format(model_name, dp)]['Test'].append(
+                        perplexity_loss(test_error))
+
+                print('epoch {} Train Loss = {}, Val Loss = {}, Test loss = {}'.format(
                     epoch, perplexity_loss(loss_term), perplexity_loss(valid_error), perplexity_loss(test_error)))
-                print('Train Loss {}, Val Loss {} '.format(
-                    loss_term, valid_error))
 
             model_dict['{} {}'.format(model_name, dp)] = model
 
@@ -208,7 +224,6 @@ def RunModel():
     fig.show()
     return model_dict, perpelxity_dict
 
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
@@ -217,12 +232,10 @@ if __name__ == '__main__':
         help='Model used for training, default <all>',
         choices=['all', 'lstm', 'gru'])
     parser.add_argument(
-        '-b', '--batch_size', type=int, default=256, help='Batch size, default <256>')
-    parser.add_argument(
         '-e', '--epochs', type=int, default=15, help='Number of epochs, default <15>')
     parser.add_argument(
-        '-p', '--data_path', type=str, default='./data/mnist',
-        help='Path to database, default <"./data/mnist">')
+        '-p', '--data_path', type=str, default='../data/ptb',
+        help='Path to database, default <".src/data/ptb">')
     parser.add_argument(
         '-v', '--verbose', dest='verbose', action='store_true', default=False, help='Enable verbose mode')
     parser.add_argument(
@@ -230,5 +243,5 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    train_and_test(args.technique, args.batch_size, args.epochs,
-                   args.data_path, args.verbose, args.test_mode)
+    train_and_test(args.model, args.epochs,
+                   args.verbose, args.test_mode, args.data_path)
