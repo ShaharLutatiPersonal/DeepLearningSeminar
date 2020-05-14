@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 from import_data import *
 from RNN_models import *
 import time
+import os
 
 """
 From wikipedia
@@ -55,7 +56,7 @@ def state_detach(states, mode):
 
 # Global definitions
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-perpelxity_dict = {}
+perplexity_dict = {}
 model_dict = {}
 cross_entropy = nn.CrossEntropyLoss(reduction='mean')
 sequence_length = 20  # maximal "memory" for the LSTM to remember
@@ -105,19 +106,18 @@ def train_and_test(chosen_models, epochs, verbose, is_test_mode, data_path='./da
         for model_name in models:
             for dp in dropout_rate:
                 # Select model
-                if model_name == 'lstm':
-                    tested_model = RNN_Zam(dict_size=len(train_vocab),
-                                   dp_prob=dp).to(device)
-                else:
-                    tested_model = GRU(dict_size=len(train_vocab), dp_prob=dp).to(device)
-                tested_model.load_state_dict(torch.load(
-                    './models/{}_{}.pth'.format(model_name, dp)), device)
+                # if model_name == 'lstm':
+                    # tested_model = RNN_Zam(dict_size=len(train_vocab),
+                                #    dp_prob=dp).to(device)
+                # else:
+                    # tested_model = GRU(dict_size=len(train_vocab), dp_prob=dp).to(device)
+                tested_model = torch.load('./models/{}_with_dropout{}.pth'.format(model_name, dp)).to(device)
                 tested_model.eval()
                 test_error = test_models(tested_model, model_name, test_vec)
-                perpelxity_dict['{} with dropout={}'.format(model_name, dp)]['Test'].append(
+                perplexity_dict['{} with dropout={}'.format(model_name, dp)]['Test'].append(
                                 perplexity_loss(test_error))
-                perpelxity_dict['{} with dropout={}'.format(model_name, dp)]['Train'].append(0)
-                perpelxity_dict['{} with dropout={}'.format(model_name, dp)]['Validation'].append(0)
+                perplexity_dict['{} with dropout={}'.format(model_name, dp)]['Train'].append(0)
+                perplexity_dict['{} with dropout={}'.format(model_name, dp)]['Validation'].append(0)
 
     else:
         for model_name in models:
@@ -141,7 +141,7 @@ def train_and_test(chosen_models, epochs, verbose, is_test_mode, data_path='./da
                 scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
                     optimizer=optimizer, mode='min', factor=.45, patience=2, verbose=True, threshold=2e-1)
 
-                perpelxity_dict['{} with dropout={}'.format(model_name, dp)] = {
+                perplexity_dict['{} with dropout={}'.format(model_name, dp)] = {
                     'Train': [], 'Validation': [], 'Test': []}
 
                 for epoch in range(epochs):
@@ -183,7 +183,7 @@ def train_and_test(chosen_models, epochs, verbose, is_test_mode, data_path='./da
                     loss_term = (loss_term/(count+1))/batch_size
                     valid_error = 0
 
-                    perpelxity_dict['{} with dropout={}'.format(model_name, dp)]['Train'].append(
+                    perplexity_dict['{} with dropout={}'.format(model_name, dp)]['Train'].append(
                         perplexity_loss(loss_term))
 
                     if verbose:
@@ -215,44 +215,59 @@ def train_and_test(chosen_models, epochs, verbose, is_test_mode, data_path='./da
                         valid_error = valid_error/(count+1)
                         scheduler.step(valid_error)
 
-                        perpelxity_dict['{} with dropout={}'.format(model_name, dp)]['Validation'].append(
+                        perplexity_dict['{} with dropout={}'.format(model_name, dp)]['Validation'].append(
                             perplexity_loss(valid_error))
 
 
                         # Test
                         test_error = test_models(model, model_name, test_vec)
-                        perpelxity_dict['{} with dropout={}'.format(model_name, dp)]['Test'].append(
+                        perplexity_dict['{} with dropout={}'.format(model_name, dp)]['Test'].append(
                             perplexity_loss(test_error))
 
                     print('Epoch {} Train Loss = {:.2f}, Val Loss = {:.2f}, Test loss = {:.2f}'.format(
                         epoch + 1, perplexity_loss(loss_term), perplexity_loss(valid_error), perplexity_loss(test_error)))
 
-                model_dict['{} {}'.format(model_name, dp)] = model
+                model_dict['{} with dropout={}'.format(model_name, dp)] = model
 
-    for mode in perpelxity_dict:
+        # Plot graphs when not in test mode
+        for mode in perplexity_dict:
+            fig, ax = plt.subplots()
+            for error_type in perplexity_dict[mode]:
+                ax.plot(perplexity_dict[mode][error_type], label=error_type)
+            ax.set_title(mode)
+            ax.grid()
+            plt.xlabel('Epoch')
+            plt.ylabel('Perplexity')
+            plt.legend()
+            fig.show()
+
+            if not os.path.exists('models'):
+                os.mkdir('models')
+            torch.save(model_dict[mode],
+                       './models/{}.pth'.format(mode.replace(' ', '_').replace('=','')))
+
+
         fig, ax = plt.subplots()
+        for mode in perplexity_dict:
+            ax.plot(perplexity_dict[mode]['Validation'], label=mode)
 
-        for error_type in perpelxity_dict[mode]:
-            ax.plot(perpelxity_dict[mode][error_type], label=error_type)
-
-        ax.set_title(mode)
         ax.grid()
         plt.xlabel('Epoch')
+        ax.set_title('Accuracies different methods')
         plt.ylabel('Perplexity')
         plt.legend()
         fig.show()
 
-    fig, ax = plt.subplots()
-    for mode in perpelxity_dict:
-        ax.plot(perpelxity_dict[mode]['Validation'], label=mode)
-
-    ax.grid()
-    plt.xlabel('Epoch')
-    ax.set_title('Accuracies different methods')
-    plt.ylabel('Perplexity')
-    plt.legend()
-    fig.show()
-    return model_dict, perpelxity_dict
+    # Print final results table
+    print('*'*70)
+    print('*'*26 + ' RESULTS  SUMMARY ' + '*'*26)
+    print('*'*70)
+    print('* model                    *** train perplexity *** test perplexity **')
+    print('*'*70)
+    for mode in perplexity_dict:
+        print('* ' + mode + ' '*(25 - len(mode)) + '***\t{:.2f}'.format(perplexity_dict[mode]['Train'][-1])
+              + '          ***  {:.2f}'.format(perplexity_dict[mode]['Test'][-1]) + '          *')
+        print('*'*70)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
