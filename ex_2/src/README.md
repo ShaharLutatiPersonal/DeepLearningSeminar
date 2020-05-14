@@ -4,8 +4,8 @@
 
 ## This Drive is Read-Only, you should copy all the files to your local machine
 
-1. Upload the data (train,val,test) to folder in the local machine under './ptb/data'
-2. Upload the traind models under './ptb/models' (optional if no training is desired)
+1. Upload the data (train,val,test) to folder in the local machine under './data'
+2. Upload the traind models under './models' (optional if no training is desired)
 3. Run the sections above train_and_test to compile it.
 4. Run train_and_test with the following arguments:
 chosen_models - 'all'/'lstm'/'gru'
