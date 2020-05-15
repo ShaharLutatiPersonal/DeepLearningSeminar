@@ -143,7 +143,7 @@ def train_and_test(chosen_models, epochs, verbose, is_test_mode, data_path='./da
 
                 perplexity_dict['{} with dropout={}'.format(model_name, dp)] = {
                     'Train': [], 'Validation': [], 'Test': []}
-
+                best_error = 9999
                 for epoch in range(epochs):
 
                     print('Start train epoch {}'.format(epoch + 1))
@@ -223,11 +223,14 @@ def train_and_test(chosen_models, epochs, verbose, is_test_mode, data_path='./da
                         test_error = test_models(model, model_name, test_vec)
                         perplexity_dict['{} with dropout={}'.format(model_name, dp)]['Test'].append(
                             perplexity_loss(test_error))
+                        
+                        if test_error < best_error:
+                            model_dict['{} with dropout={}'.format(model_name, dp)] = model
+                            best_error = test_error
 
                     print('Epoch {} Train Loss = {:.2f}, Val Loss = {:.2f}, Test loss = {:.2f}'.format(
                         epoch + 1, perplexity_loss(loss_term), perplexity_loss(valid_error), perplexity_loss(test_error)))
 
-                model_dict['{} with dropout={}'.format(model_name, dp)] = model
 
         # Plot graphs when not in test mode
         for mode in perplexity_dict:
@@ -259,15 +262,16 @@ def train_and_test(chosen_models, epochs, verbose, is_test_mode, data_path='./da
         fig.show()
 
     # Print final results table
-    print('*'*70)
-    print('*'*26 + ' RESULTS  SUMMARY ' + '*'*26)
-    print('*'*70)
-    print('* model                    *** train perplexity *** test perplexity **')
-    print('*'*70)
+    print('*'*96)
+    print('*'*39 + ' RESULTS  SUMMARY ' + '*'*39)
+    print('*'*96)
+    print('* model                    *** train perplexity *** validation perplexity *** test perplexity **')
+    print('*'*96)
     for mode in perplexity_dict:
-        print('* ' + mode + ' '*(25 - len(mode)) + '***\t{:.2f}'.format(perplexity_dict[mode]['Train'][-1])
-              + '          ***  {:.2f}'.format(perplexity_dict[mode]['Test'][-1]) + '          *')
-        print('*'*70)
+        print('* ' + mode + ' '*(25 - len(mode)) + '***\t{:.2f}'.format(min(perplexity_dict[mode]['Train']))
+              + '          ***  {:.2f}'.format(min(perplexity_dict[mode]['Validation'])) + '          *'
+              + '          ***  {:.2f}'.format(min(perplexity_dict[mode]['Test'])) + '          *')
+        print('*'*96)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
