@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 import sparsified_model
 import soundfile as sf
 import librosa
@@ -27,16 +28,45 @@ for p in audio_path:
     audio.append(torch.tensor(data))
 
 
+train_with_Shahar_Omer_voices = False
+
 dictionary = torch.load(path)
 device = 'cpu'
 T = 4 # seconds
 model = sparsified_model.WolfModel(64,16,256,3,int(T*8e3),multi_loss = False, hidden_size = 128 ,bidirectional = True,MulCat = True,weights_for_seperation=dictionary['sparsed_dict'])
+
+if train_with_Shahar_Omer_voices:
+    encdec = sparsified_model.Encoder_Decoder(64,16,256,3,4*8000,).to(device)
+    optimizer = torch.optim.Adam(encdec.parameters(),lr = 1e-3)
+    loss = torch.nn.MSELoss()
+    for ep in range(100):
+        count = 0
+        err = 0
+        for inp in dl_train:
+            optimizer.zero_grad()
+            x,_ = inp
+            x = x.squeeze().permute(1,0).unsqueeze(1)
+            x = x.to(device)
+            y = encdec(x)
+            error = loss(x,y)
+            err += error.item()
+            error.backward()
+            optimizer.step()
+            count += 1
+            if count>3000:
+                break
+
+
 model.load_my_state_dict(dictionary['origin_dict'])
+if train_with_Shahar_Omer_voices:
+    model.encoding.load_state_dict(encdec.state_dict())
+    model.deconv.load_state_dict(encdec.state_dict())
+
 model = model.to(device)
 model.eval()
 with torch.no_grad():
     cnt = 0
-    for inp1,inp2 in pairwise(audio)
+    for inp1,inp2 in pairwise(audio):
         inp = torch.stack((inp1,inp2),0)
         inp = inp.to(device)
         out = model(inp.view(2,1,-1)).detach()
