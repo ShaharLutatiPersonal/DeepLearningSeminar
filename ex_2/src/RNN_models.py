@@ -69,4 +69,3 @@ class GRU(nn.Module):
         output = self.dropout(output)
         output = output.view(-1,200) 
         output = self.fc(output)
-        return output,(h_n)
