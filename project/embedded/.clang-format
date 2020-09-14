@@ -1,0 +1,24 @@
+BasedOnStyle : Google
+AlignConsecutiveAssignments: true
+AlignConsecutiveDeclarations: true
+AlignConsecutiveMacros: true
+AlignEscapedNewlines: Right
+AlignOperands: true
+AlignTrailingComments: true
+AllowShortFunctionsOnASingleLine: None
+BreakBeforeBraces: Custom
+BraceWrapping:
+    AfterCaseLabel: true
+    AfterFunction: true
+    AfterControlStatement: Always
+BreakBeforeBinaryOperators: All
+ColumnLimit: 120
+IncludeBlocks: Preserve
+IndentGotoLabels: false
+IndentWidth: 4
+ReflowComments: true
+SortIncludes: true
+SpaceBeforeAssignmentOperators: true
+SpaceBeforeParens: ControlStatements
+TabWidth: 4
+
