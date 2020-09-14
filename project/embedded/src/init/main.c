@@ -71,7 +71,7 @@ void sai_cb(uint32_t event)
     }
 }
 
-static char recv[32000];
+static char recv[32000 * 4];
 
 int main(void)
 {
