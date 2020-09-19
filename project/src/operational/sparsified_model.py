@@ -343,10 +343,11 @@ class Encoder_Decoder(nn.Module):
         super(Encoder_Decoder, self).__init__()
         self.N,self.L,self.K,self.num_blocks= N,L,K,num_blocks
         self.eps = 1e-5
-        self.encoding = nn.Sequential(nn.Conv1d(in_channels=1,out_channels=N,kernel_size=L,stride=L//2,bias = False),nn.BatchNorm1d(N,eps = self.eps),nn.ReLU())
+        self.relu = nn.ReLU()
+        self.encoding = nn.Conv1d(in_channels=1,out_channels=N,kernel_size=L,stride=L//2,bias = False)
         self.deconv = nn.Sequential(nn.ConvTranspose1d(in_channels=N,out_channels=1,kernel_size=L,stride=L//2,bias = False))
     def forward(self,input):
-      out = self.deconv(self.encoding(input))
+      out = self.deconv(self.relu(self.encoding(input)))
       return out
 
 
@@ -376,18 +377,6 @@ class LSTM_BI_DIR( nn.Module):
 
 
 class LSTM_Sparse(nn.Module):
-
-    """
-    An implementation of Hochreiter & Schmidhuber:
-    'Long-Short Term Memory'
-    http://www.bioinf.jku.at/publications/older/2604.pdf
-    Special args:
-    dropout_method: one of
-            * pytorch: default dropout implementation
-            * gal: uses GalLSTM's dropout
-            * moon: uses MoonLSTM's dropout
-            * semeniuta: uses SemeniutaLSTM's dropout
-    """
 
     def __init__(self, hidden_size, weight_ih,bias_ih, weight_hh,bias_hh,out_channels,weight_ih_r,bias_ih_r, weight_hh_r,bias_hh_r):
         super(LSTM_Sparse, self).__init__()
