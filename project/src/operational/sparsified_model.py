@@ -8,7 +8,6 @@ import numpy as np
 import numpy as np
 from sklearn.cluster import KMeans
 import scipy.signal as sgnt
-import librosa
 from scipy.sparse import csc_matrix, csr_matrix
 
 
@@ -37,7 +36,7 @@ def amin(x):
 def clear_sound(sig,bw = 50, fs = 8000, fc = [0,1000,2000,3000,4000]):
           f,t,Zxx = sgnt.stft(sig,fs)
           Zxx_null = Zxx
-          rsmp = librosa.resample
+          #rsmp = sgnt.resample_poly
           for ix,fc_c in enumerate(fc):
               if (ix == len(fc)-1) |(ix == 0):
                   bw_c = bw * 5
@@ -53,7 +52,8 @@ def clear_sound(sig,bw = 50, fs = 8000, fc = [0,1000,2000,3000,4000]):
                   max_ix = amin(abs(f - (fc_c + bw_c)))
               Zxx_null[min_ix:max_ix,:] *= 1e-6
           _,sig_null = sgnt.istft(Zxx_null,fs)
-          sig_null = rsmp(rsmp(sig_null,fs,fs-bw*10),fs-bw*10,fs)
+          #f_const = int(fs/(fs-bw*10) * 100)
+          #sig_null = rsmp(rsmp(sig_null,100,f_const),f_const,100)
           return sig_null
 
 def tupple_p(blocknum,dict_weights):
@@ -263,29 +263,33 @@ class WolfModel(nn.Module):
             own_state[name].copy_(param)
 
 
-def apply_weight_sharing(mat, bits=5):
+def apply_weight_sharing(mat, bits=12):
     """
     Applies weight sharing to the given model
     """
     #for p in model.parameters():
     #        if 'weight' not in name:
     #            continue
+    return mat
     data = mat
     if data.numel() < 2**bits:
         return mat
     weight = data.cpu().numpy()
     shape = weight.shape
     #        print(shape)
-    mat = weight.reshape(-1,1)
-    mat = csc_matrix(mat)
-    min_ = min(mat.data)
-    max_ = max(mat.data)
+    matc = weight.reshape(-1,1)
+    matc = csc_matrix(matc)
+    min_ = min(matc.data)
+    max_ = max(matc.data)
     space = np.linspace(min_, max_, num=2**bits)
-    kmeans = KMeans(n_clusters=len(space), init=space.reshape(-1,1), n_init=1, precompute_distances=True, algorithm="full")
-    kmeans.fit(mat.data.reshape(-1,1))
+    try:
+        kmeans = KMeans(n_clusters=len(space), init=space.reshape(-1,1), n_init=1, precompute_distances=True, algorithm="full")
+        kmeans.fit(matc.data.reshape(-1,1))
+    except Exception:
+        return mat
     new_weight = kmeans.cluster_centers_[kmeans.labels_].reshape(-1)
-    mat.data = new_weight
-    mat_n = mat.toarray()
+    matc.data = new_weight
+    mat_n = matc.toarray()
     return mat_n
 
 
@@ -313,8 +317,8 @@ class SepBlock(nn.Module):
             self.rnn_3 = LSTM_BI_DIR(rnn_3_w,hidden_channels,out_channels)
             self.gn1 = nn.GroupNorm(num_groups=1,num_channels=out_channels,eps=1e-8,affine=True)
             self.gn2 = nn.GroupNorm(num_groups=1,num_channels=out_channels,eps=1e-8,affine=True)
-            self.P1 = nn.Sequential(Sparse_Linear(to_dense(P1_w).to_sparse(),P1_b))
-            self.P2 = nn.Sequential(Sparse_Linear(to_dense(P2_w).to_sparse(),P2_b))
+            self.P1 = nn.Sequential(Sparse_Linear(to_dense(P1_w),P1_b))
+            self.P2 = nn.Sequential(Sparse_Linear(to_dense(P2_w),P2_b))
         def forward(self,input):
             B,N,K,R = input.shape
             # make tensor act on short term dim
@@ -483,6 +487,7 @@ def prepare_mapping(values):
     return dicti
 
 def to_dense(mat_dict):
+    return mat_dict
     new_mat = torch.zeros(mat_dict['orig_shape'][0]*mat_dict['orig_shape'][1])
     for cnt,i in enumerate(mat_dict['ind']):
         new_mat[i] = mat_dict['values'][mat_dict['labels_'][cnt]]
@@ -491,8 +496,9 @@ def to_dense(mat_dict):
 
 
 def to_sparse_encoded_tupple(mat):
+    return mat
     orig_shape = mat.shape
-    mat_n = apply_weight_sharing(mat, bits=8)
+    mat_n = mat#apply_weight_sharing(mat, bits=12)
     mat_n = torch.tensor(mat_n).view(orig_shape)
     new_mat = {}
     new_mat['ind'] = []
@@ -533,20 +539,26 @@ class Sparse_Linear(nn.Module):
         #position_b,indecies_b,values_b,shape_b = bias
         #weight = to_mat(position_w,indecies_w,values_w,shape_w)
         #bias = to_mat(position_b,indecies_b,values_b,shape_b)
-        self.w = weight
-        self.bias = bias
+        self.ln = nn.Linear(320,64)
+        self.w = weight.to('cpu')
+        print(self.w)
+        self.bias = bias.to('cpu')
+        self.ln.bias.data = self.bias
+        self.ln.weight.data = self.w
     def forward(self,input):
         '''
         output = torch.sparse.mm(self.w, input)
         bias = self.bias.unsqueeze(1).repeat(1,output.shape[1])
         output += bias
-        '''
+        
         output = torch.sparse.mm(self.w,input.permute(1,0)).permute(1,0)
         for b in range(output.shape[0]):
             output[b,:] += self.bias
         
         #output = torch.sparse.addmm(self.bias, self.w.permute(1,0),input, beta=1, alpha=1)
-        return output
+        #return output
+        '''
+        return self.ln(input)
 
     
 
